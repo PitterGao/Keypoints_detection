@@ -1,4 +1,5 @@
 import os
+import sys
 import cv2
 import json
 import random
@@ -55,12 +56,22 @@ def split_images_keypoints(image_path, json_path, num):
     return segmented_images, segmented_keypoints
 
 
-def keypoint_detection_rate(weights, split_images, key_points, detection_num, size):
+def keypoint_detection_rate(split_images, key_points, is_onnx, weights_onnx, weights_pth, detection_num, SIZE):
     """The key point detection probability of the image is calculated"""
-    # CAM = CAMExtractor_pth(model_weights=weights, en_glcm=True)
-    CAM = CAMExtractor_onnx(model_weights=weights, en_glcm=True)
+    if is_onnx:
+        CAM = CAMExtractor_onnx(model_weights=weights_onnx, en_glcm=True)
+    else:
+        CAM = CAMExtractor_pth(model_weights=weights_pth, en_glcm=True)
 
-    indices = random.sample(range(len(split_images)), detection_num)
+    images_num = len(split_images)
+    try:
+        if detection_num > images_num:
+            raise ValueError(
+                "The number of random selections cannot be greater than the total number of segmented images")
+    except ValueError as e:
+        print(str(e))
+        sys.exit(0)
+    indices = random.sample(range(images_num), detection_num)
     selected_images = [split_images[i] for i in indices]
     selected_keypoints = [key_points[i] for i in indices]
 
@@ -71,7 +82,7 @@ def keypoint_detection_rate(weights, split_images, key_points, detection_num, si
         keypoints = selected_keypoints[i]
 
         # 生成热力图
-        input_img = cv2.resize(image, size)
+        input_img = cv2.resize(image, SIZE)
         heatmap = CAM(input_img)
 
         height, width, channels = image.shape
@@ -115,34 +126,29 @@ def main(opt):
             print(f"无法打开标注文件 {json_path}，图像 {image_name} 没有标注。")
             continue
 
-        # Map key points to the artwork and display
+        # display the key points
         # display(segmented_images, segmented_keypoints)
 
-        if opt.choose_model is True:
-            rate = keypoint_detection_rate(opt.weights_onnx, segmented_images, segmented_keypoints,
-                                           opt.detection_num, opt.SIZE)
-        else:
-            rate = keypoint_detection_rate(opt.weights_pth, segmented_images, segmented_keypoints,
-                                           opt.detection_num, opt.SIZE)
-
+        rate = keypoint_detection_rate(segmented_images, segmented_keypoints, opt.is_onnx, opt.weights_onnx,
+                                       opt.weights_pth, opt.detection_num, opt.SIZE)
         print(f"Picture-{image_name} rate:{rate * 100}%")
         print("------------------------------------------------------")
 
         num += 1
         rate_all += rate
 
-    print(f"total:{rate_all/num * 100}%")
+    print(f"total:{rate_all / num * 100}%")
     print("------------------------------------------------------")
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--split_num', default=2, help='The number of times the artwork is averaged')
-    parser.add_argument('--detection_num', default=2, help='Random extraction of a specified number of images')
+    parser.add_argument('--detection_num', default=4, help='Random extraction of a specified number of images')
     parser.add_argument('--SIZE', default=(512, 512), help='Enter the image size into the model to generate CAM')
     parser.add_argument('--img_dir', default='./data/images/', help='Image folder')
     parser.add_argument('--json_dir', default='./data/annotations/', help='Key points json folder')
-    parser.add_argument('--choose_model', default=True, help='choose resnet101.pth or camnet.onnx')
+    parser.add_argument('--is_onnx', default=False, help='choose .pth or .onnx')
     parser.add_argument('--weights_pth', default='./weights/resnet101.pth', help='pth')
     parser.add_argument('--weights_onnx', default='./weights/camnet.onnx', help='onnx')
     args = parser.parse_args()

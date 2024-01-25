@@ -1,6 +1,6 @@
 import torch
 import cv2
-from tools import fast_glcm
+from Keypoint_detection.tools import fast_glcm
 from pytorch_grad_cam.utils.image import show_cam_on_image, preprocess_image
 from pytorch_grad_cam import GradCAM
 import onnxruntime as ort
@@ -27,6 +27,8 @@ class CAMExtractor_pth:
         cam = 1 - cam
         cam = cam.squeeze()
 
+        cam_show = cv2.applyColorMap(np.uint8(255 * (1 - cam)), cv2.COLORMAP_JET)
+
         if self.en_glcm:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             mean_glcm = fast_glcm.fast_glcm_mean(gray, 0, 255, 8, 5)
@@ -38,6 +40,10 @@ class CAMExtractor_pth:
             grayscale_cam = 0.5 * weight + 0.5 * cam
             grayscale_cam = np.where(grayscale_cam > 0.5, 1, grayscale_cam)
             visualization = show_cam_on_image(norm_img, grayscale_cam, use_rgb=True)
+
+            # cv2.imshow("visualization", visualization)
+            # cv2.imshow("cam", cam_show)
+            # cv2.waitKey(0)
 
             return 1 - grayscale_cam
 
@@ -62,6 +68,8 @@ class CAMExtractor_onnx:
         cam = 1 - cam
         cam = cam.squeeze()
 
+        cam_show = cv2.applyColorMap(np.uint8(255 * (1 - cam)), cv2.COLORMAP_JET)
+
         if self.en_glcm:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             mean_glcm = fast_glcm.fast_glcm_mean(gray, 0, 255, 8, 5)
@@ -74,7 +82,8 @@ class CAMExtractor_onnx:
             grayscale_cam = np.where(grayscale_cam > 0.5, 1, grayscale_cam)
             visualization = show_cam_on_image(norm_img, grayscale_cam, use_rgb=True)
 
-            # cv2.imshow("glcm", grayscale_cam)
+            # cv2.imshow("visualization", visualization)
+            # cv2.imshow("cam", cam_show)
             # cv2.waitKey(0)
 
             return 1 - grayscale_cam
@@ -85,9 +94,9 @@ class CAMExtractor_onnx:
 
 
 if __name__ == '__main__':
-    image = cv2.imread("../data/images/Fracture.13.png")
-    # CAM = CAMExtractor_pth(model_weights="../weights/resnet101.pth", en_glcm=True)
-    CAM = CAMExtractor_onnx(model_weights="../weights/camnet.onnx", en_glcm=True)
+    image = cv2.imread("../data/images/Micritic_limestone.2.png")
+    CAM = CAMExtractor_pth(model_weights="../weights/resnet101.pth", en_glcm=True)
+    # CAM = CAMExtractor_onnx(model_weights="../weights/camnet.onnx", en_glcm=True)
     cam = CAM(image)
     cv2.imshow("cam", cam)
     cv2.waitKey(0)
